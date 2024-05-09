@@ -5,31 +5,91 @@ The `activate_node_check.py` script is executed on the Controller node to assess
 Similarly, on all compute nodes, the `shutdown_node_check.py` script is deployed. This script checks whether the node hosts any active virtual machines or if other compute nodes within the same project have adequate space to spawn buffer VMs. If ample space is available, the node is gracefully shut down.
 
 
-
-
 Install wazuh Manager.
 Install Wazuh Agent on Controller and Compute nodes.
-
 
 
 !!! note
     We are assuming agent is installed on the compute and controller node
 
-## Node Acitvation FLow
-Setup 
-In Contoller node agent
 
 
-- Install python openstack-client 6.4.0 as root user because wodle works with user having sudo permission.
+## Allow Stacking of the node in the given host aggregate that belong to the a project/tenant
+
+Below step will force the nova sceduler to fill the compute nodes that is already filled.
+
+- Create Host Aggregates
+- Add Hosts in the Host Aggregates 
+- Add Project Filter metadata
+- Add Weights as metadata to allow stacking 
     ```
-    sudo pip install python-openstackclient=6.4.0
+    cpu_weight_multiplier = -100
+    disk_weight_multiplier = -100
+    ram_weight_multiplier = -100
+    ```
+
+
+## Node Shutdown Flow
+In this step, we'll exclusively focus on the compute nodes that have been incorporated into a host aggregate associated with a specific project. Perform below operation on all the computes nodes.
+
+
+- Install python openstack-client 6.4.0 in the virualenv
+    ```
+    mkdir -p /opt/power_optimisation
+    cd /opt/power_optimisation/
+    python3 -m venv venv 
+    source venv/bin/activate
+    pip install python-openstackclient==6.4.0
+    deactivate
+    ```
+
+- Place the script `shutdown_node_check.py` at /opt/power_optimisation/shutdown_node_check.py
+    [shutdown_node_check.py](https://github.com/shubhamdang/power-optimisation/blob/main/shutdown_node_check.py)
+
+-  Now place `config.ini` at /opt/power_optimisation/config-down.ini and update the config values.
+   [config.ini](https://github.com/shubhamdang/power-optimisation/blob/main/config.ini)
+
+
+- Add the wodle execution config in wazuh agents at `sudo vi /var/ossec/etc/ossec.conf` 
+    ```
+    <ossec_config>
+    <wodle name="command">
+    <disabled>no</disabled>
+    <tag>down_vm</tag>
+    <command>/opt/power_optimisation/venv/bin/python /opt/power_optimisation/shutdown_node_check.py</command>
+    <interval>15m</interval>
+    <ignore_output>no</ignore_output>
+    <run_on_start>yes</run_on_start>
+    <timeout>0</timeout>
+    </wodle>
+    </ossec_config>
+    ```
+
+- Restart the wazuh agent
+    ```
+    sudo systemctl restart wazuh-agent
+    ```
+
+
+## Node Acitvation FLow
+In this step, performing installation of python virtualenv and config update of wazuh is performed on the director node only.
+
+
+- Install python openstack-client 6.4.0 in the virualenv
+    ```
+    mkdir -p /opt/power_optimisation
+    cd /opt/power_optimisation/
+    python3 -m venv venv 
+    source venv/bin/activate
+    pip install python-openstackclient==6.4.0
+    deactivate
     ```
 
 - Place the script `activate_node_check.py` at /opt/power_optimisation/activate_node_check.py
-    ```
-    mkdir -p opt/power_optimisation
-    ## place the code 
-    ```
+    [`activate_node_check.py](https://github.com/shubhamdang/power-optimisation/blob/main/activate_node_check.py)
+
+-  Now place `config.ini` at /opt/power_optimisation/config-up.ini and update the config values.
+    [config.ini](https://github.com/shubhamdang/power-optimisation/blob/main/config.ini)
 
 - Add the wodle execution config in wazuh agents at `sudo vi /var/ossec/etc/ossec.conf` 
     ```
@@ -37,73 +97,24 @@ In Contoller node agent
     <wodle name="command">
     <disabled>no</disabled>
     <tag>up_vm</tag>
-    <command>/usr/bin/python3 /opt/power_optimisation/activate_node_check.py </command>
-    <interval>1m</interval>
+    <command>/opt/power_optimisation/venv/bin/python /opt/power_optimisation/activate_node_check.py </command>
+    <interval>2m</interval>
     <ignore_output>no</ignore_output>
     <run_on_start>yes</run_on_start>
     <timeout>0</timeout>
     </wodle>
-    <ossec_config>
-    ```
-
-
-
-- Add the `activate_node_ar.py` script in the wazuh agent in directory `/var/ossec/active-response/bin/` and apply the below permission.
-    ```
-    sudo chmod 750  /var/ossec/active-response/bin/activate_node_ar.py
-    sudo chown root:wazuh /var/ossec/active-response/bin/activate_node_ar.pyy
+    </ossec_config>
     ```
 
 
 - Restart the wazuh agent
     ```
-    sudo systemctl start wazuh-agent
+    sudo systemctl restart wazuh-agent
     ```
 
 
 
-
-
-## Node Shutdown Flow
-In Compute node agent
-Setup 
-
-- Install python openstack-client 6.4.0 as root user because wodle works with user having sudo permission.
-    ```
-    sudo pip install python-openstackclient=6.4.0
-    ```
-
-- Place the script `shutdown_node_check.py` at /opt/power_optimisation/shutdown_node_check.py
-    ```
-    mkdir -p opt/power_optimisation
-    ## place the code 
-    ```
-
-- Add the wodle execution config in wazuh agents at `sudo vi /var/ossec/etc/ossec.conf` 
-```
-<ossec_config>
-<wodle name="command">
-  <disabled>no</disabled>
-  <tag>down_vm</tag>
-  <command>/usr/bin/python3 /opt/power_optimisation/shutdown_node_check.py</command>
-  <interval>1m</interval>
-  <ignore_output>no</ignore_output>
-  <run_on_start>yes</run_on_start>
-  <timeout>0</timeout>
-</wodle>
-<ossec_config>
- ```
-
-
-
-
-- Restart the wazuh agent
-    ```
-    sudo systemctl start wazuh-agent
-    ```
-
-
-## Add Config in Wazuh Manager for rules event trigger and active response 
+## Add Config in Wazuh Manager for log decoder and rule event trigger
 
 - Add Decoder in the file `/var/ossec/etc/decoders/local_decoder.xml`.
     ```
@@ -128,7 +139,7 @@ Setup
 
 - Add rules in the File `/var/ossec/etc/rules/local_rules.xml`
     ```
-    <group name="compute__metric,">
+    <group name="compute_metric,">
         <rule id="100054" level="3">
     <decoded_as>compute_status_check</decoded_as>
     <description>Compute Status Check</description>
@@ -152,22 +163,7 @@ Setup
     </group>
     ```
 
-- Add active response in the file `/var/ossec/etc/ossec.conf`.
-
+- Restart the wazuh manager
     ```
-    <ossec_config>
-        <command>
-            <name>node-up-ar</name>
-            <executable>node_up_ar.py</executable>
-            <timeout_allowed>yes</timeout_allowed>
-        </command>
-
-        <active-response>
-            <disabled>no</disabled>
-            <command>node-up-ar</command>
-            <location>local</location>
-            <rules_id>100056</rules_id>
-            <timeout>60</timeout>
-        </active-response>
-    </ossec_config>
+    sudo systemctl restart wazuh-manager
     ```
