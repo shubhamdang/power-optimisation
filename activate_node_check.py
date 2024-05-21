@@ -21,7 +21,6 @@ USERNAME = config['DEFAULT']['USERNAME']
 PASSWORD = config['DEFAULT']['PASSWORD']
 ADMIN_PROJECT_NAME = config['DEFAULT']['ADMIN_PROJECT_NAME']
 
-PROJECT_ID =  config['DEFAULT']['HA_FILTER_PROJECT_ID']
 
 def enable_node(session, hostname):
     nova = nova_client.Client('2.1', session=session)
@@ -35,7 +34,6 @@ def check_and_activate_baremetal(ip):
             power_command = ['ipmitool', '-I', 'lanplus', '-U', USERNAME, '-P', PASSWORD, '-H', str(ip), 'power', 'status']
             power_out = subprocess.run(power_command, capture_output=True, text=True)
             power_state = power_out.stdout.split('\n')[-2].strip().split(' ')[-1]
-            # print(power_state)
 
             if power_state == 'on':
                 return True
@@ -92,14 +90,20 @@ def check_node_available_for_project_up(max_flavor, session, project_id):
             disabled_nodes.append(hypervisor_details.to_dict())
             #TODO sort list of dictionary on the basis of names
     disabled_nodes = sorted(disabled_nodes, key=lambda x: x['id'])
-    # print(disabled_nodes)
-    # print(vm_count)
+    
     if vm_count >= int(REQUIRED_VM_BUFFEER):
         return False, []
     return True, disabled_nodes
 
 
 def main():
+    try:
+        project_id = sys.argv[1]
+    # possible values of severity low, medium, high, critical 
+    except IndexError:
+        print("Usage: /opt/power_optimisation/venv/bin/python activate_node_check.py <project_id>")
+        quit()
+
     # Create a Keystone session
     auth = v3.Password(auth_url=AUTH_URL,
                        username=USERNAME,
@@ -111,25 +115,25 @@ def main():
 
     # Get the maximum flavor size
     max_flavor = get_max_flavor(session=sess)
-    # print(max_flavor)
+    print(f"Max Flavor: {max_flavor.name}")
 
     # Get the available nodes
    
     new_node_needed, disabled_nodes = check_node_available_for_project_up(max_flavor, 
                                                                         session=sess, 
-                                                                        project_id=PROJECT_ID)
-    # print(disabled_nodes)
-    # print(is_node_available) # if True then start the new node.
+                                                                        project_id=project_id)
     
 
     if new_node_needed and disabled_nodes:
         print_log(new_node_needed)
         disabled_node = disabled_nodes[0]
+        print(f"Buffer VMs (count: {REQUIRED_VM_BUFFEER}) cannot be created in Active node, activating the node: {disabled_node['hypervisor_hostname']} that belongs to project({project_id}).")
         host_mgmt_ip = f"10.11.11.{disabled_node['host_ip'].split('.')[-1]}"
         if check_and_activate_baremetal(host_mgmt_ip):
             enable_node(session=sess, hostname=disabled_node['hypervisor_hostname'])
+    else:
+        print(f"Buffer VMs (count: {REQUIRED_VM_BUFFEER}) be created in Active node, not activating more nodes in project({project_id})")
 
-            
 
 if __name__ == "__main__":
     main()

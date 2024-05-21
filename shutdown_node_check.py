@@ -20,14 +20,21 @@ AUTH_URL = config['DEFAULT']['AUTH_URL']
 USERNAME = config['DEFAULT']['USERNAME']
 PASSWORD = config['DEFAULT']['PASSWORD']
 ADMIN_PROJECT_NAME = config['DEFAULT']['ADMIN_PROJECT_NAME']
-PROJECT_ID =  config['DEFAULT']['HA_FILTER_PROJECT_ID']
 
 
+def fetch_node_project_id(session):
+    hostname = socket.gethostname()
+    nova = nova_client.Client('2.1', session=session)
+    aggregates = nova.aggregates.list()
+    for aggregate in aggregates:
+        if hostname in aggregate.hosts:
+            return aggregate.metadata['filter_tenant_id']
+    
+ 
 
 def disable_node(session):
     hostname = socket.gethostname()
     nova = nova_client.Client('2.1', session=session)
-    # service_id = nova.services.list(binary='nova-compute', host=hostname)[0].id
     nova.services.disable_log_reason(hostname, reason="Power Saving", binary="nova-compute")
     os.system("shutdown -h now")
 
@@ -91,8 +98,6 @@ def check_node_available_for_project_down(max_flavor, session, project_id):
         return True
     return False
 
-
-
 def main():
     # Create a Keystone session
     auth = v3.Password(auth_url=AUTH_URL,
@@ -102,17 +107,23 @@ def main():
                        user_domain_name='Default',
                        project_domain_name='Default')
     sess = ks_session.Session(auth=auth)
+    project_id = fetch_node_project_id(session=sess)
+    if project_id:
+        # Get the maximum flavor size
+        max_flavor = get_max_flavor(session=sess)
+        print(f"Max Flavor: {max_flavor.name}")
 
-    # Get the maximum flavor size
-    max_flavor = get_max_flavor(session=sess)
+
+        # Get the available nodes
+        shutdown_node = check_node_available_for_project_down(max_flavor, session=sess, project_id=project_id)
+        if shutdown_node:
+            print(f"Active nodes in project({project_id}0) have ample space to create Buffer VMs(count: {REQUIRED_VM_BUFFEER}) , shutting down the node.")
+            print_log(shutdown_node) # if it comes true then shutdown the node
+            disable_node(session=sess)
+        else:
+            print(f"Active nodes in project({project_id}) don't have ample space to create more than Buffer VMs(count: {REQUIRED_VM_BUFFEER}) , not doing anything.")
 
 
-    # Get the available nodes
-    shutdown_node = check_node_available_for_project_down(max_flavor, session=sess, project_id=PROJECT_ID)
-    if shutdown_node:
-        print_log(shutdown_node) # if it comes true then shutdown the node
-        disable_node(session=sess)
-    
 
 if __name__ == "__main__":
     main()

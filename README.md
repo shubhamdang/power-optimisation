@@ -1,6 +1,6 @@
 In our OpenStack environment, each customer is assigned a project, and within each project, there are associated compute nodes.
 
-The `activate_node_check.py` script is executed on the Controller node to assess whether it's necessary to start a compute node. This script evaluates the availability of space on active nodes to accommodate buffer VMs. If sufficient space is unavailable, the compute node associated with the respective customer's project is activated using Wazuh's active-response feature.
+The `activate_node_check.py` script is executed on the Controller node to assess whether it's necessary to start a compute node. This script evaluates the availability of space on active nodes to accommodate buffer VMs. If sufficient space is not available, the compute node associated with the respective customer's project is activated using Wazuh's active-response feature.
 
 Similarly, on all compute nodes, the `shutdown_node_check.py` script is deployed. This script checks whether the node hosts any active virtual machines or if other compute nodes within the same project have adequate space to spawn buffer VMs. If ample space is available, the node is gracefully shut down.
 
@@ -44,13 +44,14 @@ In this step, we'll exclusively focus on the compute nodes that have been incorp
     ```
 
 - Place the script `shutdown_node_check.py` at /opt/power_optimisation/shutdown_node_check.py
+    This script checks which project the current node is associated with using host aggregates mapping. Based on resouces available, it then decides whether the node needs to be shut down or not.
     [shutdown_node_check.py](https://github.com/shubhamdang/power-optimisation/blob/main/shutdown_node_check.py)
 
 -  Now place `config.ini` at /opt/power_optimisation/config-down.ini and update the config values.
    [config.ini](https://github.com/shubhamdang/power-optimisation/blob/main/config.ini)
 
 
-- Add the wodle execution config in wazuh agents at `sudo vi /var/ossec/etc/ossec.conf` 
+- Add the wodle execution config in wazuh agents at `sudo vi /var/ossec/etc/ossec.conf`, this is responsible for   execution of `shutdown_node_check.py` in fixed interval of 15 minutes.
     ```
     <ossec_config>
     <wodle name="command">
@@ -86,6 +87,7 @@ In this step, performing installation of python virtualenv and config update of 
     ```
 
 - Place the script `activate_node_check.py` at /opt/power_optimisation/activate_node_check.py
+  This script checks the available resources on the compute nodes that are mapped to the project uuid provided in the command line args of the script. Based on resouces available, it then decides whether the node needs to be activated  or not.
     [`activate_node_check.py](https://github.com/shubhamdang/power-optimisation/blob/main/activate_node_check.py)
 
 -  Now place `config.ini` at /opt/power_optimisation/config-up.ini and update the config values.
@@ -97,7 +99,7 @@ In this step, performing installation of python virtualenv and config update of 
     <wodle name="command">
     <disabled>no</disabled>
     <tag>up_vm</tag>
-    <command>/opt/power_optimisation/venv/bin/python /opt/power_optimisation/activate_node_check.py </command>
+    <command>/opt/power_optimisation/venv/bin/python /opt/power_optimisation/activate_node_check.py 17234a6cc8954d748ed74a31680ea39b</command>
     <interval>2m</interval>
     <ignore_output>no</ignore_output>
     <run_on_start>yes</run_on_start>
@@ -105,7 +107,11 @@ In this step, performing installation of python virtualenv and config update of 
     </wodle>
     </ossec_config>
     ```
-
+    
+    In the command we need to pass the project uuid, for each project or customer we need to create separate wodle like above.
+    ```
+    <command>/opt/power_optimisation/venv/bin/python /opt/power_optimisation/activate_node_check.py <project_uuid> </command>
+    ```
 
 - Restart the wazuh agent
     ```
