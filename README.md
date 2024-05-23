@@ -173,3 +173,27 @@ In this step, performing installation of python virtualenv and config update of 
     ```
     sudo systemctl restart wazuh-manager
     ```
+
+## Move compute nodes between Host Aggregate that is mapped to new project
+For shutdown of the node no change at wazuh side
+
+for activation of node we need to add new project wodle in director node in `/var/ossec/etc/ossec.conf`
+    ```
+    <ossec_config>
+    <wodle name="command">
+    <disabled>no</disabled>
+    <tag>up_vm</tag>
+    <command>/opt/power_optimisation/venv/bin/python /opt/power_optimisation/activate_node_check.py <project_uuid> </command>
+    <interval>2m</interval>
+    <ignore_output>no</ignore_output>
+    <run_on_start>yes</run_on_start>
+    <timeout>0</timeout>
+    </wodle>
+    </ossec_config>
+    ```
+
+Where project_uuid is new project uuid that is not added in config file.
+
+
+## Move compute nodes between Host Aggregate that is mapped to existing project
+In this case, no changes are needed on the Wazuh side. Simply move the host from one HA to another.

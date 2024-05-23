@@ -48,10 +48,10 @@ def check_and_activate_baremetal(ip):
             time.sleep(180)
     return False
 
-def print_log(message):
+def print_log(message, up_hostname):
     hostname = socket.gethostname()
     timestamp = datetime.datetime.now().strftime("%b %d %H:%M:%S")
-    print(f"{timestamp} {hostname} compute_status_check: ossec: output: 'make_node_up': {message}")
+    print(f"{timestamp} {hostname} compute_status_check: ossec: output: 'make_node_up({up_hostname})': {message}")
 
 
 def get_max_flavor(session):
@@ -115,7 +115,6 @@ def main():
 
     # Get the maximum flavor size
     max_flavor = get_max_flavor(session=sess)
-    print(f"Max Flavor: {max_flavor.name}")
 
     # Get the available nodes
    
@@ -125,15 +124,13 @@ def main():
     
 
     if new_node_needed and disabled_nodes:
-        print_log(new_node_needed)
         disabled_node = disabled_nodes[0]
-        print(f"Buffer VMs (count: {REQUIRED_VM_BUFFEER}) cannot be created in Active node, activating the node: {disabled_node['hypervisor_hostname']} that belongs to project({project_id}).")
         host_mgmt_ip = f"10.11.11.{disabled_node['host_ip'].split('.')[-1]}"
+        hostname = disabled_node['hypervisor_hostname']
+        print_log(new_node_needed, hostname)
         if check_and_activate_baremetal(host_mgmt_ip):
-            enable_node(session=sess, hostname=disabled_node['hypervisor_hostname'])
-    else:
-        print(f"Buffer VMs (count: {REQUIRED_VM_BUFFEER}) be created in Active node, not activating more nodes in project({project_id})")
-
+            enable_node(session=sess, hostname=hostname)
+    
 
 if __name__ == "__main__":
     main()

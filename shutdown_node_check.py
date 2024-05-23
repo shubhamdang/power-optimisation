@@ -42,7 +42,7 @@ def disable_node(session):
 def print_log(message):
     hostname = socket.gethostname()
     timestamp = datetime.datetime.now().strftime("%b %d %H:%M:%S")
-    print(f"{timestamp} {hostname} compute_status_check: ossec: output: 'make_node_down': {message}")
+    print(f"{timestamp} {hostname} compute_status_check: ossec: output: 'make_node_down({hostname})': {message}")
 
 def is_virsh_node_empty():
     
@@ -111,19 +111,14 @@ def main():
     if project_id:
         # Get the maximum flavor size
         max_flavor = get_max_flavor(session=sess)
-        print(f"Max Flavor: {max_flavor.name}")
 
 
         # Get the available nodes
         shutdown_node = check_node_available_for_project_down(max_flavor, session=sess, project_id=project_id)
         if shutdown_node:
-            print(f"Active nodes in project({project_id}0) have ample space to create Buffer VMs(count: {REQUIRED_VM_BUFFEER}) , shutting down the node.")
             print_log(shutdown_node) # if it comes true then shutdown the node
             disable_node(session=sess)
-        else:
-            print(f"Active nodes in project({project_id}) don't have ample space to create more than Buffer VMs(count: {REQUIRED_VM_BUFFEER}) , not doing anything.")
-
-
+        
 
 if __name__ == "__main__":
     main()
