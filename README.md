@@ -232,4 +232,4 @@ On the director node or the node where we wanted to collect all the logs place t
 ## CONS 
 
 - If we need to updgrade the scripts, we need to make sure that all the nodes should be active.
-- No support for tiemout of scheduling the VM if compute node is not activated at the right moment.
+- No support for timeout of scheduling the VM if compute node is not activated at the right moment.
