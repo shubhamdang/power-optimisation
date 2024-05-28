@@ -4,6 +4,9 @@ import sys
 import socket
 import subprocess
 import configparser
+import logging
+import logging.handlers
+import socket
 from novaclient import client as nova_client
 from keystoneauth1.identity import v3
 from keystoneauth1 import session as ks_session
@@ -39,10 +42,37 @@ def disable_node(session):
     os.system("shutdown -h now")
 
 
-def print_log(message):
+def central_logging(project_id):
+    # Define the logger
+    logger = logging.getLogger('PowerOptimisationLogger')
+    logger.setLevel(logging.INFO)
+
+    # Define the remote syslog server address and port
+    remote_syslog_server = 'director'  
+    remote_syslog_port = 514                
+
+    # Define the syslog handler for TCP
+    syslog_handler = logging.handlers.SysLogHandler(address=(remote_syslog_server, remote_syslog_port), socktype=socket.SOCK_STREAM, facility=logging.handlers.SysLogHandler.LOG_LOCAL0)
+
+    # Define the log format
+    hostname = socket.gethostname()
+    formatter = logging.Formatter('%(asctime)s ' + hostname + ' %(name)s: %(message)s', datefmt='%b %d %H:%M:%S')
+
+    # Add the formatter to the handler
+    syslog_handler.setFormatter(formatter)
+
+    # Add the handler to the logger
+    logger.addHandler(syslog_handler)
+
+    # Send a test message
+    message = f"Turning off node ({hostname}) Since no virtual machine on the node, other compute node in project {project_id} is capable of creating the buffer VM count of {REQUIRED_VM_BUFFEER}."
+    logger.info(message)
+
+
+def print_log(project_id):
     hostname = socket.gethostname()
     timestamp = datetime.datetime.now().strftime("%b %d %H:%M:%S")
-    print(f"{timestamp} {hostname} compute_status_check: ossec: output: 'make_node_down({hostname})': {message}")
+    print(f"{timestamp} {hostname} compute_status_check: ossec: output: 'make_node_down': True {project_id} {hostname}")
 
 def is_virsh_node_empty():
     
@@ -116,7 +146,8 @@ def main():
         # Get the available nodes
         shutdown_node = check_node_available_for_project_down(max_flavor, session=sess, project_id=project_id)
         if shutdown_node:
-            print_log(shutdown_node) # if it comes true then shutdown the node
+            central_logging(project_id)
+            print_log(project_id) # if it comes true then shutdown the node
             disable_node(session=sess)
         
 

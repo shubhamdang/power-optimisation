@@ -178,6 +178,7 @@ In this step, performing installation of python virtualenv and config update of 
 For shutdown of the node no change at wazuh side
 
 for activation of node we need to add new project wodle in director node in `/var/ossec/etc/ossec.conf`
+
     ```
     <ossec_config>
     <wodle name="command">
@@ -197,3 +198,38 @@ Where project_uuid is new project uuid that is not added in config file.
 
 ## Move compute nodes between Host Aggregate that is mapped to existing project
 In this case, no changes are needed on the Wazuh side. Simply move the host from one HA to another.
+
+
+## Central Logging 
+On the director node or the node where we wanted to collect all the logs place the below config.
+
+    ```
+    sudo vi  /etc/rsyslog.d/power_optimisation.conf
+
+    # Provides TCP syslog reception
+    #module(load="imtcp")
+    #input(type="imtcp" port="514")
+
+    # Define a custom log format template
+    template(name="CustomLogFormat" type="string"
+            string="<%pri%>%timegenerated% %HOSTNAME% %syslogtag%%msg%\n")
+
+    # Use the custom log format for all incoming logs on a specific facility, e.g., local1
+    local0.* action(type="omfile" file="/var/log/os_power_optimisation.log" template="CustomLogFormat")
+
+    # Restart the rsyslog service
+    systemctl restart rsyslog
+    ```
+
+
+
+## PROS
+
+- No need to change openstack core logic.
+- Can be extended to slurm and other clusters.
+- Support for slack and central logging.
+
+## CONS 
+
+- If we need to updgrade the scripts, we need to make sure that all the nodes should be active.
+- No support for tiemout of scheduling the VM if compute node is not activated at the right moment.

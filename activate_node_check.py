@@ -5,6 +5,9 @@ import subprocess
 import datetime
 import configparser
 import time
+import logging
+import logging.handlers
+import socket
 from novaclient import client as nova_client
 from keystoneauth1.identity import v3
 from keystoneauth1 import session as ks_session
@@ -48,10 +51,36 @@ def check_and_activate_baremetal(ip):
             time.sleep(180)
     return False
 
-def print_log(message, up_hostname):
+def central_logging(up_hostname, project_id):
+    # Define the logger
+    logger = logging.getLogger('PowerOptimisationLogger')
+    logger.setLevel(logging.INFO)
+
+    # Define the remote syslog server address and port
+    remote_syslog_server = 'localhost'  
+    remote_syslog_port = 514                
+
+    # Define the syslog handler for TCP
+    syslog_handler = logging.handlers.SysLogHandler(address=(remote_syslog_server, remote_syslog_port), socktype=socket.SOCK_STREAM, facility=logging.handlers.SysLogHandler.LOG_LOCAL0)
+
+    # Define the log format
+    hostname = socket.gethostname()
+    formatter = logging.Formatter('%(asctime)s ' + hostname + ' %(name)s: %(message)s', datefmt='%b %d %H:%M:%S')
+
+    # Add the formatter to the handler
+    syslog_handler.setFormatter(formatter)
+
+    # Add the handler to the logger
+    logger.addHandler(syslog_handler)
+
+    # Send a test message
+    message = f"Turning on node ({up_hostname}), active compute node(s) in project {project_id} is not capable of creating the buffer VM count of {REQUIRED_VM_BUFFEER}."
+    logger.info(message)
+
+def print_event_log(up_hostname, project_id):
     hostname = socket.gethostname()
     timestamp = datetime.datetime.now().strftime("%b %d %H:%M:%S")
-    print(f"{timestamp} {hostname} compute_status_check: ossec: output: 'make_node_up({up_hostname})': {message}")
+    print(f"{timestamp} {hostname} compute_status_check: ossec: output: 'make_node_up': True {project_id} {up_hostname}")
 
 
 def get_max_flavor(session):
@@ -121,13 +150,12 @@ def main():
     new_node_needed, disabled_nodes = check_node_available_for_project_up(max_flavor, 
                                                                         session=sess, 
                                                                         project_id=project_id)
-    
-
     if new_node_needed and disabled_nodes:
         disabled_node = disabled_nodes[0]
         host_mgmt_ip = f"10.11.11.{disabled_node['host_ip'].split('.')[-1]}"
         hostname = disabled_node['hypervisor_hostname']
-        print_log(new_node_needed, hostname)
+        print_event_log(hostname, project_id)
+        central_logging(hostname, project_id)
         if check_and_activate_baremetal(host_mgmt_ip):
             enable_node(session=sess, hostname=hostname)
     
